@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}[hidden]{display:none!important}</style>
+<title>Chico del Suéter Azul</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: el modelo ocupa toda la pantalla; una barra de controles flota abajo */
+:root {
+  --bg: #e6e9ee;
+  --floor: #d3d8e0;
+  --fg: #1c2230;
+  --muted: #5d6677;
+  --panel: rgba(255,255,255,.82);
+  --line: #c3c9d4;
+  --accent: #2b3a78;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151c; --floor: #1d222c; --fg: #e8ebf2; --muted: #98a1b3;
+  --panel: rgba(24,28,37,.85); --line: #333b4a; --accent: #8fa3ff; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12151c; --floor: #1d222c; --fg: #e8ebf2; --muted: #98a1b3;
+  --panel: rgba(24,28,37,.85); --line: #333b4a; --accent: #8fa3ff; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-mono); overflow: hidden; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+header {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: 0; right: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  pointer-events: none;
+}
+h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(22px, 4vw, 34px); letter-spacing: -.01em; text-wrap: balance; }
+header p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.bar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+  max-width: calc(100% - 32px); padding: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.bar button {
+  font: 500 12px var(--font-mono); letter-spacing: .03em; color: var(--fg);
+  background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 8px 12px; cursor: pointer;
+}
+.bar button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
+.bar button:hover { border-color: var(--line); }
+.bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sep { width: 1px; background: var(--line); margin: 4px 2px; }
+#err { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; color: var(--muted); }
+</style>
+
+</head>
+<body>
+<div id="stage"></div>
+<header>
+  <h1>Chico del suéter azul</h1>
+  <p>Figura 3D estilizada · arrastra para girar · pellizca o rueda para acercar</p>
+</header>
+<div class="bar" role="toolbar" aria-label="Controles del modelo">
+  <button id="pose-sit" aria-pressed="true">Sentado</button>
+  <button id="pose-stand" aria-pressed="false">De pie</button>
+  <span class="sep"></span>
+  <button id="bag" aria-pressed="true">Morral</button>
+  <button id="spin" aria-pressed="true">Girar</button>
+</div>
+<div id="err" hidden>No se pudo cargar el visor 3D en este navegador.</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  if (!window.THREE || !THREE.OrbitControls) { document.getElementById('err').hidden = false; return; }
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const stage = document.getElementById('stage');
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  stage.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 50);
+  camera.position.set(2.2, 1.55, 3.4);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0.95, 0);
+  controls.enableDamping = true;
+  controls.minDistance = 1.2; controls.maxDistance = 7;
+  controls.maxPolarAngle = Math.PI * 0.52;
+  controls.autoRotate = !reduce; controls.autoRotateSpeed = 1.1;
+
+  scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x3a3226, 0.75));
+  const key = new THREE.DirectionalLight(0xfff1e0, 1.05);
+  key.position.set(2.5, 4.5, 3); key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  Object.assign(key.shadow.camera, { left: -2, right: 2, top: 3, bottom: -1 });
+  key.shadow.bias = -0.0004;
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x9fb4ff, 0.45); rim.position.set(-3, 2.5, -3); scene.add(rim);
+
+  const floorMat = new THREE.MeshStandardMaterial({ color: css('--floor'), roughness: 1 });
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(3, 64), floorMat);
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+  // Colores tomados de las fotos
+  const M = (c, r = 0.85, extra = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: r }, extra));
+  const mat = {
+    skin: M(0xe2b59a, 0.7), skinShade: M(0xc9937a, 0.7),
+    hair: M(0x2a1b14, 0.65), hoodie: M(0x262f63, 0.92), hoodieDark: M(0x1d2550, 0.95),
+    print: M(0xc9cfdf, 0.8), pants: M(0x6e7179, 0.95), shoe: M(0x1b1b1f, 0.6), sole: M(0xe4e4e4, 0.8),
+    bag: M(0x16171b, 0.55), reflect: M(0xbfc4cc, 0.35, { metalness: 0.25 }), eye: M(0x1a1210, 0.3),
+    white: M(0xf3efe9, 0.4), lip: M(0xb57a6c, 0.7), wood: M(0x8a5a35, 0.75), metal: M(0x9aa0a8, 0.4, { metalness: 0.6 })
+  };
+  const mesh = (g, m, parent, x = 0, y = 0, z = 0) => {
+    const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true;
+    if (parent) parent.add(o); return o;
+  };
+  const cap = (r, len) => new THREE.CapsuleGeometry(r, len, 6, 16);
+  const grp = (parent, x = 0, y = 0, z = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
+
+  // Generador con semilla: el pelo sale igual en cada carga
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  const root = grp(scene);
+  const body = grp(root);       // se baja al sentarse
+  const pelvis = grp(body, 0, 0.95, 0);
+
+  // ---- Piernas (pantalón gris, zapatos negros con suela blanca)
+  const legs = [-1, 1].map(s => {
+    const hip = grp(pelvis, s * 0.095, 0, 0);
+    mesh(cap(0.078, 0.34), mat.pants, hip, 0, -0.21, 0);
+    const knee = grp(hip, 0, -0.43, 0);
+    mesh(cap(0.066, 0.34), mat.pants, knee, 0, -0.2, 0);
+    const ankle = grp(knee, 0, -0.42, 0);
+    mesh(new THREE.BoxGeometry(0.11, 0.075, 0.25), mat.shoe, ankle, 0, -0.02, 0.05);
+    mesh(new THREE.BoxGeometry(0.115, 0.022, 0.26), mat.sole, ankle, 0, -0.065, 0.05);
+    return { hip, knee, ankle };
+  });
+  mesh(new THREE.SphereGeometry(0.17, 24, 16), mat.pants, pelvis, 0, 0.01, 0).scale.set(1.15, 0.6, 0.8);
+
+  // ---- Torso con suéter azul marino
+  const chest = grp(pelvis, 0, 0.05, 0);
+  const torso = mesh(cap(0.18, 0.3), mat.hoodie, chest, 0, 0.27, 0);
+  torso.scale.set(1.22, 1, 0.78);
+  const hem = mesh(new THREE.TorusGeometry(0.205, 0.028, 10, 32), mat.hoodieDark, chest, 0, 0.03, 0);
+  hem.scale.set(1.08, 0.75, 1); hem.rotation.x = Math.PI / 2;
+  const pocket = mesh(new THREE.BoxGeometry(0.24, 0.1, 0.02), mat.hoodieDark, chest, 0, 0.14, 0.138);
+  pocket.rotation.x = -0.12;
+  // Estampado blanco pequeño en el pecho (lado derecho de él)
+  const printG = grp(chest, -0.09, 0.4, 0.145);
+  printG.rotation.y = -0.25;
+  mesh(new THREE.BoxGeometry(0.075, 0.012, 0.004), mat.print, printG, 0, 0.018, 0);
+  mesh(new THREE.BoxGeometry(0.055, 0.008, 0.004), mat.print, printG, 0, 0, 0);
+  mesh(new THREE.BoxGeometry(0.07, 0.008, 0.004), mat.print, printG, 0, -0.016, 0);
+  // Capucha caída sobre la espalda
+  const hood = mesh(new THREE.TorusGeometry(0.115, 0.055, 12, 28, Math.PI * 1.25), mat.hoodie, chest, 0, 0.51, -0.06);
+  hood.rotation.set(Math.PI / 2 + 0.25, 0, Math.PI * 1.375);
+  hood.scale.set(1.15, 1, 1);
+  mesh(new THREE.SphereGeometry(0.11, 20, 14), mat.hoodieDark, chest, 0, 0.47, -0.15).scale.set(1.3, 0.7, 0.6);
+  // Cordones de la capucha
+  [-1, 1].forEach(s => mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.12, 6), mat.print, chest, s * 0.04, 0.43, 0.135));
+
+  // ---- Brazos (mangas largas, solo asoman las manos)
+  const arms = [-1, 1].map(s => {
+    const sh = grp(chest, s * 0.235, 0.44, 0);
+    mesh(new THREE.SphereGeometry(0.075, 16, 12), mat.hoodie, sh);
+    mesh(cap(0.064, 0.22), mat.hoodie, sh, 0, -0.15, 0);
+    const el = grp(sh, 0, -0.29, 0);
+    mesh(cap(0.058, 0.2), mat.hoodie, el, 0, -0.13, 0);
+    mesh(new THREE.TorusGeometry(0.05, 0.014, 8, 20), mat.hoodieDark, el, 0, -0.255, 0).rotation.x = Math.PI / 2;
+    const wr = grp(el, 0, -0.28, 0);
+    const hand = mesh(new THREE.SphereGeometry(0.048, 16, 12), mat.skin, wr, 0, -0.035, 0);
+    hand.scale.set(0.8, 1.15, 0.55);
+    const thumb = mesh(cap(0.014, 0.03), mat.skin, wr, s * -0.03, -0.02, 0.025); thumb.rotation.z = s * 0.6;
+    return { sh, el, wr };
+  });
+
+  // ---- Cuello y cabeza
+  const neck = grp(chest, 0, 0.55, 0.0);
+  mesh(new THREE.CylinderGeometry(0.05, 0.056, 0.1, 16), mat.skin, neck, 0, 0.03, 0);
+  const head = grp(neck, 0, 0.1, 0.01);
+  const skull = mesh(new THREE.SphereGeometry(0.112, 32, 24), mat.skin, head, 0, 0.1, 0);
+  skull.scale.set(0.9, 1.1, 1);
+  const jaw = mesh(new THREE.SphereGeometry(0.085, 24, 16), mat.skin, head, 0, 0.045, 0.025);
+  jaw.scale.set(0.95, 0.9, 1.05);
+  // Orejas
+  [-1, 1].forEach(s => mesh(new THREE.SphereGeometry(0.026, 12, 10), mat.skinShade, head, s * 0.1, 0.1, -0.005).scale.set(0.45, 1, 0.8));
+  // Ojos con mirada baja (como en la foto)
+  [-1, 1].forEach(s => {
+    const e = grp(head, s * 0.038, 0.115, 0.093);
+    mesh(new THREE.SphereGeometry(0.016, 14, 10), mat.white, e).scale.set(1.2, 0.7, 0.5);
+    mesh(new THREE.SphereGeometry(0.009, 12, 8), mat.eye, e, 0, -0.003, 0.006);
+    const lid = mesh(new THREE.SphereGeometry(0.019, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat.skin, e, 0, 0.0, 0.0);
+    lid.scale.set(1.15, 0.9, 0.62); lid.rotation.x = 0.55;
+    const brow = mesh(new THREE.BoxGeometry(0.04, 0.007, 0.008), mat.hair, head, s * 0.04, 0.143, 0.1);
+    brow.rotation.z = s * -0.12;
+  });
+  const nose = mesh(new THREE.ConeGeometry(0.014, 0.04, 10), mat.skin, head, 0, 0.088, 0.112);
+  nose.rotation.x = Math.PI / 2 + 0.35;
+  mesh(new THREE.BoxGeometry(0.032, 0.006, 0.008), mat.lip, head, 0, 0.045, 0.105);
+
+  // Pelo oscuro despeinado: casco + mechones, flequillo que cae sobre la frente
+  const hair = grp(head, 0, 0.1, 0);
+  mesh(new THREE.SphereGeometry(0.122, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.56), mat.hair, hair, 0, 0.004, -0.008).scale.set(0.95, 1.08, 1.05);
+  const tuft = (len, r) => new THREE.ConeGeometry(r, len, 7);
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < 110; i++) {
+    const theta = rnd() * Math.PI * 2;
+    const phi = 0.12 + rnd() * 1.25;            // 0 = coronilla
+    const front = Math.cos(theta) > 0.55 && phi > 0.5; // zona de la frente
+    if (front && phi > 1.05) continue;
+    const dir = new THREE.Vector3(Math.sin(phi) * Math.sin(theta), Math.cos(phi), Math.sin(phi) * Math.cos(theta));
+    const p = dir.clone().multiply(new THREE.Vector3(0.112, 0.128, 0.122));
+    const len = front ? 0.06 + rnd() * 0.03 : 0.05 + rnd() * 0.04;
+    const t = mesh(tuft(len, 0.03 + rnd() * 0.014), mat.hair, hair, p.x * 0.97, p.y, p.z * 0.97 - 0.008);
+    // los mechones caen pegados a la cabeza; el flequillo cae hacia la frente
+    const fall = dir.clone().multiplyScalar(0.35).add(new THREE.Vector3(0, -1, front ? 0.25 : 0)).normalize();
+    fall.x += (rnd() - 0.5) * 0.5; fall.z += (rnd() - 0.5) * 0.3;
+    t.quaternion.setFromUnitVectors(up, fall.normalize());
+    t.translateY(len * 0.35);
+  }
+  // Patillas y nuca
+  [-1, 1].forEach(s => mesh(new THREE.BoxGeometry(0.012, 0.05, 0.03), mat.hair, head, s * 0.1, 0.13, 0.03));
+  mesh(new THREE.SphereGeometry(0.1, 20, 12), mat.hair, head, 0, 0.07, -0.06).scale.set(0.95, 0.75, 0.6);
+
+  // ---- Morral negro con franjas reflectivas
+  const bag = grp(chest, 0, 0.27, -0.2);
+  const bagBody = mesh(new THREE.BoxGeometry(0.32, 0.42, 0.14), mat.bag, bag);
+  mesh(new THREE.BoxGeometry(0.26, 0.2, 0.05), mat.bag, bag, 0, -0.07, -0.09);
+  mesh(new THREE.BoxGeometry(0.325, 0.022, 0.145), mat.reflect, bag, 0, 0.13, 0);
+  mesh(new THREE.BoxGeometry(0.022, 0.2, 0.052), mat.reflect, bag, 0.07, -0.07, -0.092);
+  mesh(new THREE.BoxGeometry(0.022, 0.2, 0.052), mat.reflect, bag, -0.07, -0.07, -0.092);
+  mesh(new THREE.TorusGeometry(0.04, 0.008, 8, 16, Math.PI), mat.bag, bag, 0, 0.21, 0);
+  const bagParts = [bag];
+  [-1, 1].forEach(s => {
+    const strap = mesh(new THREE.BoxGeometry(0.045, 0.5, 0.012), mat.bag, chest, s * 0.11, 0.3, 0.1);
+    strap.rotation.x = -0.12;
+    const top = mesh(new THREE.TorusGeometry(0.1, 0.012, 6, 16, Math.PI * 0.9), mat.bag, chest, s * 0.11, 0.48, -0.04);
+    top.rotation.set(0, Math.PI / 2, Math.PI * 0.05);
+    const pad = mesh(new THREE.BoxGeometry(0.047, 0.035, 0.014), mat.reflect, chest, s * 0.11, 0.2, 0.112);
+    bagParts.push(strap, top, pad);
+  });
+
+  // ---- Pupitre (solo en pose sentado)
+  const desk = grp(scene, 0, 0, 0);
+  mesh(new THREE.BoxGeometry(0.48, 0.035, 0.45), mat.wood, desk, 0, 0.45, -0.02);
+  mesh(new THREE.BoxGeometry(0.42, 0.3, 0.025), mat.wood, desk, 0, 0.72, -0.27).rotation.x = -0.12;
+  mesh(new THREE.BoxGeometry(0.5, 0.03, 0.34), mat.wood, desk, 0.12, 0.73, 0.32).rotation.x = 0.05;
+  [[-0.21, 0.17], [0.21, 0.17], [-0.21, -0.21], [0.21, -0.21]].forEach(([x, z]) =>
+    mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.45, 8), mat.metal, desk, x, 0.225, z));
+  mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 8), mat.metal, desk, 0.33, 0.58, 0.32);
+
+  // ---- Poses
+  const P = {
+    sit: { y: -0.43, hip: -1.5, knee: 1.45, ankle: 0.05, spread: 0.12, chest: 0.12, neck: 0.2, head: 0.18,
+           sh: [-0.7, -0.75], shZ: [0.15, -0.1], el: [-0.9, -1.25], desk: 1 },
+    stand: { y: 0, hip: 0, knee: 0, ankle: 0, spread: 0.03, chest: 0, neck: 0.05, head: 0.08,
+             sh: [0.08, 0.05], shZ: [0.12, -0.12], el: [-0.15, -0.2], desk: 0 }
+  };
+  let cur = Object.assign({}, P.sit, { sh: P.sit.sh.slice(), shZ: P.sit.shZ.slice(), el: P.sit.el.slice() });
+  let target = P.sit;
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  function applyPose(p) {
+    body.position.y = p.y;
+    legs.forEach((l, i) => {
+      l.hip.rotation.x = p.hip; l.hip.rotation.y = (i ? 1 : -1) * p.spread * 0.6;
+      l.hip.rotation.z = (i ? 1 : -1) * p.spread * 0.4;
+      l.knee.rotation.x = p.knee; l.ankle.rotation.x = p.ankle;
+    });
+    chest.rotation.x = p.chest; neck.rotation.x = p.neck; head.rotation.x = p.head;
+    arms.forEach((a, i) => { a.sh.rotation.x = p.sh[i]; a.sh.rotation.z = (i ? 1 : -1) * Math.abs(p.shZ[i]); a.el.rotation.x = p.el[i]; });
+    desk.scale.setScalar(Math.max(0.001, p.desk)); desk.visible = p.desk > 0.02;
+  }
+  applyPose(cur);
+
+  function step(dt) {
+    const t = reduce ? 1 : Math.min(1, dt * 5);
+    for (const k of ['y', 'hip', 'knee', 'ankle', 'spread', 'chest', 'neck', 'head', 'desk']) cur[k] = lerp(cur[k], target[k], t);
+    for (const k of ['sh', 'shZ', 'el']) for (let i = 0; i < 2; i++) cur[k][i] = lerp(cur[k][i], target[k][i], t);
+    applyPose(cur);
+  }
+
+  // Respiración suave
+  let clock = 0;
+  function idle(dt) {
+    if (reduce) return;
+    clock += dt;
+    torso.scale.y = 1 + Math.sin(clock * 1.6) * 0.012;
+    head.rotation.y = Math.sin(clock * 0.35) * 0.08;
+  }
+
+  // ---- Controles
+  const $ = id => document.getElementById(id);
+  const setPose = name => {
+    target = P[name];
+    $('pose-sit').setAttribute('aria-pressed', name === 'sit');
+    $('pose-stand').setAttribute('aria-pressed', name === 'stand');
+    controls.target.set(0, name === 'sit' ? 0.75 : 0.95, 0);
+  };
+  $('pose-sit').onclick = () => setPose('sit');
+  $('pose-stand').onclick = () => setPose('stand');
+  $('bag').onclick = e => {
+    const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+    e.currentTarget.setAttribute('aria-pressed', on);
+    bagParts.forEach(o => o.visible = on);
+  };
+  $('spin').onclick = e => {
+    controls.autoRotate = !controls.autoRotate;
+    e.currentTarget.setAttribute('aria-pressed', controls.autoRotate);
+  };
+  if (reduce) $('spin').setAttribute('aria-pressed', 'false');
+  setPose('sit');
+
+  // Cambio de tema: el piso sigue al token
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => floorMat.color.set(css('--floor')));
+  new MutationObserver(() => floorMat.color.set(css('--floor'))).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.fov = w < 600 ? 42 : 32;
+    camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize); resize();
+
+  let last = performance.now();
+  renderer.setAnimationLoop(now => {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    step(dt); idle(dt); controls.update(); renderer.render(scene, camera);
+  });
+})();
+</script>
+
+</body>
+</html>
